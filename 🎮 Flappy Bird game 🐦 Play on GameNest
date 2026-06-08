@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flippy Bird</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'Press Start 2P',monospace;overflow:hidden;touch-action:none}
+#gameWrap{position:relative;width:400px;height:600px;max-width:100vw;max-height:calc(100vh - 20px)}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;border-radius:8px;box-shadow:0 0 0 4px #f7d94c,0 0 40px #f7d94c55}
+
+/* SCREENS */
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border-radius:8px;transition:opacity .3s}
+.screen.hide{opacity:0;pointer-events:none}
+
+/* START SCREEN */
+#startScreen{background:linear-gradient(180deg,#70c5ce 0%,#b8e8f0 60%,#6dbf3d 60%,#c8a23a 80%)}
+.game-logo{font-size:28px;color:#fff;text-shadow:3px 3px 0 #c8a800,5px 5px 0 #000;margin-bottom:8px;animation:logoFloat 1.5s ease-in-out infinite alternate}
+@keyframes logoFloat{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+.logo-bird-preview{font-size:48px;margin-bottom:10px;animation:logoFloat 1s ease-in-out infinite alternate}
+.start-btn{margin-top:18px;background:#f7d94c;border:none;border-bottom:5px solid #c8a000;border-radius:8px;padding:14px 36px;font-family:'Press Start 2P',monospace;font-size:13px;color:#333;cursor:pointer;box-shadow:2px 2px 0 #000;transition:transform .1s}
+.start-btn:active{transform:translateY(3px);border-bottom-width:2px}
+.tap-hint{color:#fff;font-size:8px;text-shadow:1px 1px 0 #000;margin-top:12px;animation:blink 1s steps(1) infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* BIRD SELECT */
+#birdSelect{background:linear-gradient(180deg,#1a1a2e,#2a2a4e)}
+.select-title{color:#f7d94c;font-size:14px;text-shadow:2px 2px 0 #000;margin-bottom:24px}
+.birds-row{display:flex;gap:16px;justify-content:center;margin-bottom:24px}
+.bird-option{display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;padding:12px;border-radius:10px;border:3px solid transparent;transition:border-color .2s,transform .2s;background:rgba(255,255,255,0.07)}
+.bird-option:hover{transform:scale(1.08)}
+.bird-option.selected{border-color:#f7d94c;background:rgba(247,217,76,0.15)}
+.bird-emoji{font-size:38px;line-height:1}
+.bird-name{font-size:7px;color:#ccc}
+.play-btn{background:#5ac45a;border:none;border-bottom:5px solid #2a8a2a;border-radius:8px;padding:14px 40px;font-family:'Press Start 2P',monospace;font-size:13px;color:#fff;cursor:pointer;box-shadow:2px 2px 0 #000;transition:transform .1s;text-shadow:1px 1px 0 #000}
+.play-btn:active{transform:translateY(3px);border-bottom-width:2px}
+
+/* HUD */
+#hud{pointer-events:none;background:transparent}
+#scoreHud{position:absolute;top:16px;left:50%;transform:translateX(-50%);color:#fff;font-size:22px;text-shadow:2px 2px 0 #000,0 0 10px rgba(0,0,0,.4)}
+
+/* GAME OVER */
+#gameOver{background:rgba(0,0,0,0.65);border-radius:8px}
+.go-panel{background:linear-gradient(180deg,#f0a030,#f7d94c);border-radius:12px;padding:24px 32px;text-align:center;box-shadow:0 6px 0 #c8a000,0 8px 0 #000;min-width:260px}
+.go-title{font-size:20px;color:#fff;text-shadow:2px 2px 0 #000;margin-bottom:16px}
+.go-scores{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.go-score-row{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.3);border-radius:6px;padding:8px 14px}
+.go-score-label{font-size:8px;color:#333}
+.go-score-val{font-size:16px;color:#fff;text-shadow:1px 1px 0 #000}
+.go-medal{font-size:40px;margin:8px 0}
+.go-btns{display:flex;gap:12px;justify-content:center}
+.go-btn{border:none;border-radius:8px;padding:12px 22px;font-family:'Press Start 2P',monospace;font-size:10px;cursor:pointer;box-shadow:2px 4px 0 #000;transition:transform .1s;text-shadow:1px 1px 0 rgba(0,0,0,.4)}
+.go-btn:active{transform:translateY(2px);box-shadow:2px 2px 0 #000}
+.btn-retry{background:#f05050;border-bottom:4px solid #a02020;color:#fff}
+.btn-menu{background:#5090f0;border-bottom:4px solid #2050b0;color:#fff}
+
+/* MEDAL pulse */
+@keyframes medalPop{0%{transform:scale(0) rotate(-20deg)}70%{transform:scale(1.2) rotate(5deg)}100%{transform:scale(1) rotate(0)}}
+.medal-anim{animation:medalPop .5s ease forwards}
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="c" width="400" height="600"></canvas>
+
+  <!-- START SCREEN -->
+  <div class="screen" id="startScreen">
+    <div class="logo-bird-preview" id="logoBird">🐦</div>
+    <div class="game-logo">FLIPPY BIRD</div>
+    <button class="start-btn" id="startBtn">▶ START</button>
+    <div class="tap-hint">TAP OR PRESS SPACE</div>
+  </div>
+
+  <!-- BIRD SELECT -->
+  <div class="screen hide" id="birdSelect">
+    <div class="select-title">CHOOSE YOUR BIRD</div>
+    <div class="birds-row" id="birdsRow"></div>
+    <button class="play-btn" id="playBtn">PLAY !</button>
+  </div>
+
+  <!-- HUD -->
+  <div class="screen hide" id="hud">
+    <div id="scoreHud">0</div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="screen hide" id="gameOver">
+    <div class="go-panel">
+      <div class="go-title">GAME OVER</div>
+      <div class="go-medal" id="goMedal">🏅</div>
+      <div class="go-scores">
+        <div class="go-score-row"><span class="go-score-label">SCORE</span><span class="go-score-val" id="goScore">0</span></div>
+        <div class="go-score-row"><span class="go-score-label">BEST</span><span class="go-score-val" id="goBest">0</span></div>
+      </div>
+      <div class="go-btns">
+        <button class="go-btn btn-retry" id="retryBtn">🔄 RETRY</button>
+        <button class="go-btn btn-menu" id="menuBtn">🏠 MENU</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── BIRDS ────────────────────────────────────────────────────────────────────
+const BIRDS = [
+  { emoji:'🐦', name:'CLASSIC',  color:'#f7d94c', wing:'#f0c020' },
+  { emoji:'🦅', name:'EAGLE',    color:'#8B4513', wing:'#5C2D0A' },
+  { emoji:'🦜', name:'PARROT',   color:'#22cc44', wing:'#118822' },
+  { emoji:'🐧', name:'PENGUIN',  color:'#111',    wing:'#333'    },
+  { emoji:'🦆', name:'DUCK',     color:'#3a8adf', wing:'#1a5aaf' },
+  { emoji:'🦩', name:'FLAMINGO', color:'#ff69b4', wing:'#cc3380' },
+];
+let selectedBird = 0;
+
+// ─── BIRD SELECTOR UI ─────────────────────────────────────────────────────────
+const birdsRow = document.getElementById('birdsRow');
+BIRDS.forEach((b, i) => {
+  const div = document.createElement('div');
+  div.className = 'bird-option' + (i===0?' selected':'');
+  div.innerHTML = `<div class="bird-emoji">${b.emoji}</div><div class="bird-name">${b.name}</div>`;
+  div.onclick = () => {
+    document.querySelectorAll('.bird-option').forEach(d=>d.classList.remove('selected'));
+    div.classList.add('selected');
+    selectedBird = i;
+    document.getElementById('logoBird').textContent = b.emoji;
+  };
+  birdsRow.appendChild(div);
+});
+
+// ─── AUDIO (Web Audio API — no files needed) ──────────────────────────────────
+const AC = new (window.AudioContext||window.webkitAudioContext)();
+function beep(freq,dur,type='square',vol=0.18){
+  try{
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type=type; o.frequency.value=freq;
+    g.gain.setValueAtTime(vol,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
+    o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+function soundFlap(){ beep(520,.09,'square',.12); }
+function soundScore(){ beep(660,.07,'square',.15); setTimeout(()=>beep(880,.1,'square',.15),80); }
+function soundHit(){
+  beep(150,.15,'sawtooth',.3);
+  setTimeout(()=>beep(100,.25,'sawtooth',.25),100);
+}
+function soundDie(){
+  beep(220,.2,'sawtooth',.2);
+  setTimeout(()=>beep(110,.4,'sawtooth',.18),150);
+}
+
+// ─── CANVAS / GAME ────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W=400, H=600, GROUND_H=90;
+const PIPE_W=60, PIPE_GAP=155, PIPE_SPEED=2.6, GRAVITY=0.4, FLAP_V=-7.5;
+
+let state='start', bird, pipes, score, best, lastPipeT, raf, bgX=0, groundX=0;
+best = +localStorage.getItem('fb2_best')||0;
+
+function $ (id){ return document.getElementById(id); }
+function showScreen(id){
+  ['startScreen','birdSelect','hud','gameOver'].forEach(s=>$(s).classList.add('hide'));
+  if(id) $(id).classList.remove('hide');
+}
+
+// ─── SCREENS ──────────────────────────────────────────────────────────────────
+$('startBtn').onclick = () => { AC.resume(); showScreen('birdSelect'); };
+$('playBtn').onclick  = startGame;
+$('retryBtn').onclick = startGame;
+$('menuBtn').onclick  = () => { cancelAnimationFrame(raf); showScreen('startScreen'); state='start'; };
+
+document.addEventListener('keydown', e => {
+  if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); handleTap(); }
+});
+canvas.addEventListener('pointerdown', e=>{ e.preventDefault(); handleTap(); });
+
+function handleTap(){
+  AC.resume();
+  if(state==='playing') flap();
+}
+
+function startGame(){
+  bird = { x:100, y:H/2-30, vy:0, rot:0, flap:0, dead:false };
+  pipes=[]; score=0; lastPipeT=0;
+  $('scoreHud').textContent='0';
+  showScreen('hud');
+  state='playing';
+  cancelAnimationFrame(raf);
+  raf=requestAnimationFrame(loop);
+}
+
+function flap(){
+  bird.vy=FLAP_V;
+  bird.flap=10;
+  soundFlap();
+}
+
+// ─── DRAW BACKGROUND ──────────────────────────────────────────────────────────
+function drawSky(){
+  const g=ctx.createLinearGradient(0,0,0,H-GROUND_H);
+  g.addColorStop(0,'#70c5ce');
+  g.addColorStop(1,'#c8ecf5');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H-GROUND_H);
+}
+
+let clouds=[{x:60,y:55,w:90,s:.4},{x:220,y:35,w:70,s:.6},{x:320,y:75,w:100,s:.25}];
+function drawClouds(){
+  ctx.fillStyle='rgba(255,255,255,0.88)';
+  clouds.forEach(c=>{
+    if(state==='playing') c.x-=c.s;
+    if(c.x+c.w<0) c.x=W+c.w;
+    const r=c.w/2;
+    ctx.beginPath();
+    ctx.ellipse(c.x,c.y,r*.9,r*.42,0,0,Math.PI*2);
+    ctx.ellipse(c.x+r*.5,c.y-r*.25,r*.52,r*.35,0,0,Math.PI*2);
+    ctx.ellipse(c.x-r*.4,c.y-r*.18,r*.42,r*.3,0,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function drawGround(){
+  if(state==='playing') groundX=(groundX-PIPE_SPEED*1.1)%(W);
+  // grass
+  ctx.fillStyle='#6dbf3d'; ctx.fillRect(0,H-GROUND_H,W,16);
+  ctx.fillStyle='#5aa030';
+  for(let x=groundX;x<W+20;x+=22) ctx.fillRect(x,H-GROUND_H,12,7);
+  // dirt
+  const dg=ctx.createLinearGradient(0,H-GROUND_H+16,0,H);
+  dg.addColorStop(0,'#c8a23a'); dg.addColorStop(1,'#a07820');
+  ctx.fillStyle=dg; ctx.fillRect(0,H-GROUND_H+16,W,GROUND_H-16);
+  // lines
+  ctx.fillStyle='rgba(0,0,0,.1)';
+  for(let y=H-GROUND_H+30;y<H;y+=18) ctx.fillRect(0,y,W,2);
+}
+
+// ─── PIPES ────────────────────────────────────────────────────────────────────
+function addPipe(){
+  const min=60,max=H-GROUND_H-PIPE_GAP-60;
+  pipes.push({x:W+10,topH:min+Math.random()*(max-min),passed:false});
+}
+
+function drawPipe(p){
+  const capH=22;
+  function body(x,y,w,h,flip){
+    const g=ctx.createLinearGradient(x,0,x+w,0);
+    g.addColorStop(0,'#5ac45a'); g.addColorStop(.3,'#7ade7a'); g.addColorStop(1,'#3a8a3a');
+    ctx.fillStyle=g; ctx.fillRect(x+4,y,w-8,h);
+    ctx.fillStyle=g; ctx.fillRect(x,flip?y:y+h-capH,w,capH);
+    ctx.fillStyle='rgba(255,255,255,.2)';
+    ctx.fillRect(x+6,flip?y+4:y+h-capH+4,10,capH-8);
+    ctx.strokeStyle='#2a6a2a'; ctx.lineWidth=2;
+    ctx.strokeRect(x,flip?y:y+h-capH,w,capH);
+  }
+  body(p.x,0,PIPE_W,p.topH,false);
+  const botY=p.topH+PIPE_GAP, botH=H-GROUND_H-botY;
+  body(p.x,botY,PIPE_W,botH,true);
+}
+
+// ─── BIRD ─────────────────────────────────────────────────────────────────────
+function drawBird(b){
+  const bd=BIRDS[selectedBird];
+  ctx.save();
+  ctx.translate(b.x,b.y);
+  ctx.rotate(b.rot);
+  if(b.dead){ ctx.globalAlpha=0.7; }
+
+  // body
+  ctx.fillStyle=bd.color;
+  ctx.beginPath(); ctx.ellipse(0,0,20,15,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // wing
+  const wingY=b.flap>0?-8:5;
+  ctx.fillStyle=bd.wing;
+  ctx.beginPath(); ctx.ellipse(-3,wingY,12,6,-0.5,0,Math.PI*2); ctx.fill();
+
+  // eye
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(10,-4,5.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#111';
+  ctx.beginPath(); ctx.arc(11.5,-4,2.8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(12.5,-5,1.2,0,Math.PI*2); ctx.fill();
+
+  // beak
+  ctx.fillStyle='#f08020';
+  ctx.beginPath(); ctx.moveTo(17,-1); ctx.lineTo(26,-3); ctx.lineTo(26,2); ctx.lineTo(17,3); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#c05000'; ctx.lineWidth=1; ctx.stroke();
+
+  ctx.restore();
+}
+
+// ─── PARTICLES ────────────────────────────────────────────────────────────────
+let particles=[];
+function poof(x,y){
+  for(let i=0;i<16;i++){
+    const a=Math.PI*2*i/16;
+    particles.push({x,y,vx:Math.cos(a)*3.5,vy:Math.sin(a)*3.5-2,life:1,r:5+Math.random()*4,c:['#f7d94c','#f08020','#ff5050'][i%3]});
+  }
+}
+function drawParticles(){
+  particles=particles.filter(p=>p.life>0);
+  particles.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.18; p.life-=.03;
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+// ─── COLLISION ────────────────────────────────────────────────────────────────
+function collides(b){
+  if(b.y+15>=H-GROUND_H||b.y-15<=0) return true;
+  for(const p of pipes){
+    if(b.x+16>p.x+5&&b.x-16<p.x+PIPE_W-5){
+      if(b.y-13<p.topH||b.y+13>p.topH+PIPE_GAP) return true;
+    }
+  }
+  return false;
+}
+
+// ─── IDLE ANIMATION ───────────────────────────────────────────────────────────
+let idleT=0;
+function drawIdleBird(){
+  idleT+=0.04;
+  const yOff=Math.sin(idleT)*8;
+  const fakeBird={x:W/2,y:H/2+yOff-60,vy:0,rot:Math.sin(idleT)*.15,flap:Math.sin(idleT*3)>0?5:0,dead:false};
+  drawBird(fakeBird);
+}
+
+// ─── GAME OVER SCREEN ─────────────────────────────────────────────────────────
+function showGameOver(){
+  $('goScore').textContent=score;
+  $('goBest').textContent=best;
+  const medal=score>=40?'🏆':score>=20?'🥇':score>=10?'🥈':score>=5?'🥉':'💀';
+  const m=$('goMedal');
+  m.textContent=medal; m.className='go-medal';
+  setTimeout(()=>m.classList.add('medal-anim'),50);
+  showScreen('gameOver');
+}
+
+// ─── SCORE FLASH ──────────────────────────────────────────────────────────────
+let scoreFlash=0;
+function flashScore(){
+  scoreFlash=12;
+}
+
+// ─── MAIN LOOP ────────────────────────────────────────────────────────────────
+let lastT=0;
+function loop(now){
+  raf=requestAnimationFrame(loop);
+  // Draw
+  drawSky();
+  drawClouds();
+
+  if(state==='playing'){
+    // Pipes
+    if(now-lastPipeT>1550){ addPipe(); lastPipeT=now; }
+    pipes.forEach(p=>{ p.x-=PIPE_SPEED; });
+    pipes=pipes.filter(p=>p.x+PIPE_W>-10);
+    pipes.forEach(p=>{
+      if(!p.passed&&p.x+PIPE_W<bird.x){
+        p.passed=true; score++;
+        $('scoreHud').textContent=score;
+        if(score>best){ best=score; localStorage.setItem('fb2_best',best); }
+        soundScore(); flashScore();
+      }
+    });
+    // Physics
+    bird.vy+=GRAVITY; bird.y+=bird.vy;
+    bird.rot=Math.max(-.5,Math.min(1.5,bird.vy*.065));
+    if(bird.flap>0) bird.flap--;
+    // Collision
+    if(collides(bird)){
+      soundHit(); setTimeout(soundDie,150);
+      poof(bird.x,bird.y);
+      state='dying';
+      setTimeout(()=>{ state='dead'; showGameOver(); },700);
+    }
+  }
+
+  pipes.forEach(drawPipe);
+  drawGround();
+
+  if(state==='playing'||state==='dying'){
+    drawBird(bird);
+  }
+  if(state==='start') drawIdleBird();
+
+  drawParticles();
+
+  // Score flash
+  if(scoreFlash>0){
+    ctx.fillStyle=`rgba(255,255,255,${scoreFlash/12*.5})`;
+    ctx.fillRect(0,0,W,H);
+    scoreFlash--;
+  }
+}
+raf=requestAnimationFrame(loop);
+
+// show start
+showScreen('startScreen');
+</script>
+</body>
+</html>
